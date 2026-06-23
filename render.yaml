@@ -19,4 +19,4 @@ services:
       - key: PORT
         value: 10000
       - key: FORECAST_URL
-        value: https://eventDrivenCongestion.onrender.com
+        value: https://eventdrivencongestion.onrender.com
