@@ -1,7 +1,7 @@
 services:
   # Python Forecasting Engine
   - type: web
-    name: gridlock-forecasting
+    name: gridlock-forecasting-engine
     runtime: python
     plan: free
     rootDir: forecasting
@@ -10,7 +10,7 @@ services:
 
   # Node.js Backend Gateway
   - type: web
-    name: gridlock-backend
+    name: gridlock-api-gateway
     runtime: node
     plan: free
     rootDir: backend
@@ -18,11 +18,11 @@ services:
     startCommand: node server.js
     envVars:
       - key: FORECAST_URL
-        value: https://gridlock-forecasting.onrender.com
+        value: https://gridlock-forecasting-engine.onrender.com
 
   # React Frontend
   - type: web
-    name: gridlock-frontend
+    name: gridlock-dashboard
     runtime: node
     plan: free
     rootDir: frontend
@@ -30,4 +30,4 @@ services:
     startCommand: npx serve -s dist -l $PORT
     envVars:
       - key: VITE_API_URL
-        value: https://gridlock-backend.onrender.com
+        value: https://gridlock-api-gateway.onrender.com
