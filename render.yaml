@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: eventDrivenCongestion
+    name: eventdrivencongestion
     env: python
     rootDir: forecasting
     buildCommand: pip install -r requirements.txt
