@@ -1,22 +1,7 @@
 services:
   - type: web
-    name: eventdrivencongestion
+    name: gridlock-forecasting
     env: python
     rootDir: forecasting
     buildCommand: pip install -r requirements.txt
     startCommand: uvicorn app:app --host 0.0.0.0 --port $PORT
-    envVars:
-      - key: PORT
-        value: 8000
-
-  - type: web
-    name: gridlock-backend
-    env: node
-    rootDir: backend
-    buildCommand: npm install
-    startCommand: node server.js
-    envVars:
-      - key: PORT
-        value: 10000
-      - key: FORECAST_URL
-        value: https://eventdrivencongestion.onrender.com

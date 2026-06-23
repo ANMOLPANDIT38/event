@@ -10,11 +10,7 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 const FORECAST_URL = process.env.FORECAST_URL || 'http://localhost:8000';
 
-app.use(cors({
-  origin: ['https://event-driven-congestion-beta.vercel.app', 'http://localhost:5173'],
-  methods: ['GET', 'POST'],
-  allowedHeaders: ['Content-Type']
-}));
+app.use(cors());
 app.use(morgan('dev'));
 app.use(express.json());
 
@@ -156,14 +152,5 @@ app.listen(PORT, () => {
   console.log(
     `Backend running on port ${PORT}`
   );
-
-  console.log('FORECAST_URL environment variable =', FORECAST_URL);
-
-  console.log('All registered routes:');
-  app._router.stack.forEach((middleware) => {
-    if (middleware.route) {
-      console.log(`  ${Object.keys(middleware.route.methods).join(',').toUpperCase()} ${middleware.route.path}`);
-    }
-  });
 
 });
