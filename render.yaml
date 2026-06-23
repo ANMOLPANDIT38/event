@@ -1,7 +1,35 @@
 services:
+  # Python Forecasting Engine
   - type: web
     name: gridlock-forecasting
     env: python
     rootDir: forecasting
     buildCommand: pip install -r requirements.txt
     startCommand: uvicorn app:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: PORT
+        value: 8000
+
+  # Node.js Backend Gateway
+  - type: web
+    name: gridlock-backend
+    env: node
+    rootDir: backend
+    buildCommand: npm install
+    startCommand: node server.js
+    envVars:
+      - key: PORT
+        value: 3000
+      - key: FORECAST_URL
+        value: https://gridlock-forecasting.onrender.com
+
+  # React Frontend
+  - type: web
+    name: gridlock-frontend
+    env: node
+    rootDir: frontend
+    buildCommand: npm install && npm run build
+    startCommand: npm run preview
+    envVars:
+      - key: VITE_API_URL
+        value: https://gridlock-backend.onrender.com

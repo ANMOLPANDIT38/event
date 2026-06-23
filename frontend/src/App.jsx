@@ -524,7 +524,7 @@ export default function App() {
       const { data } = await axios.post(
   `${import.meta.env.VITE_API_URL}/api/forecast`,
   {
-    event_type: form.event_type.toLowerCase(),
+    event_type: form.event_type.toLowerCase().replace(/ /g, '_').replace(/\//g, '_').replace(/_+/g, '_'),
     duration_minutes: form.duration_minutes,
     priority: form.priority,
   }
