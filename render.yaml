@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: gridlock-forecasting
+    name: eventdrivencongestion
     env: python
     rootDir: forecasting
     buildCommand: pip install -r requirements.txt
@@ -10,7 +10,7 @@ services:
         value: 8000
 
   - type: web
-    name: gridlock-backend
+    name: eventdrivencongestion-1
     env: node
     rootDir: backend
     buildCommand: npm install
@@ -19,4 +19,4 @@ services:
       - key: PORT
         value: 10000
       - key: FORECAST_URL
-        value: https://gridlock-forecasting.onrender.com
+        value: https://eventdrivencongestion.onrender.com
