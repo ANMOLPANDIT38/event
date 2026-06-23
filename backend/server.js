@@ -10,7 +10,11 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 const FORECAST_URL = process.env.FORECAST_URL || 'http://localhost:8000';
 
-app.use(cors());
+app.use(cors({
+  origin: ['https://event-driven-congestion-beta.vercel.app', 'http://localhost:5173'],
+  methods: ['GET', 'POST'],
+  allowedHeaders: ['Content-Type']
+}));
 app.use(morgan('dev'));
 app.use(express.json());
 
