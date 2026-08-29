@@ -31,12 +31,44 @@ EVENT_TYPE_RISK: dict[str, float] = {
 }
 
 
+def _train_and_persist():
+    global model, encoder
+    _, df_clean, df_agg = run_pipeline()
+    X, y = _prepare_training_data(df_clean, df_agg)
+    if len(X) < 5:
+        raise ValueError("Insufficient data to train (minimum 5 samples).")
+    trained_model = RandomForestRegressor(
+        n_estimators=300,
+        max_depth=12,
+        min_samples_leaf=2,
+        random_state=42,
+        n_jobs=-1,
+    )
+    trained_model.fit(X, y)
+    joblib.dump(trained_model, MODEL_PATH)
+    joblib.dump(encoder, ENCODER_PATH)
+    model = trained_model
+    importances = dict(zip(feature_columns, trained_model.feature_importances_.round(4).tolist()))
+    return len(X), importances
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global model, encoder
     if os.path.exists(MODEL_PATH) and os.path.exists(ENCODER_PATH):
-        model = joblib.load(MODEL_PATH)
-        encoder = joblib.load(ENCODER_PATH)
+        try:
+            model = joblib.load(MODEL_PATH)
+            encoder = joblib.load(ENCODER_PATH)
+        except Exception as e:
+            print("Error loading existing model/encoder, retraining:", e)
+            model, encoder = None, None
+    if model is None or encoder is None:
+        try:
+            print("Model not found. Initializing and training model on startup...")
+            _train_and_persist()
+            print("Model successfully initialized on startup.")
+        except Exception as e:
+            print("Failed to initialize model on startup:", e)
     yield
 
 
@@ -125,38 +157,16 @@ def health():
 @app.post("/train", response_model=TrainResponse)
 def train():
     """Load historical data, train a RandomForestRegressor, and persist the model."""
-    global model, encoder
-
     try:
-        _, df_clean, df_agg = run_pipeline()
+        samples_trained, importances = _train_and_persist()
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Pipeline failed: {exc}")
 
-    try:
-        X, y = _prepare_training_data(df_clean, df_agg)
-    except ValueError as exc:
-        raise HTTPException(status_code=422, detail=str(exc))
-
-    if len(X) < 5:
-        raise HTTPException(status_code=422, detail="Insufficient data to train (minimum 5 samples).")
-
-    model = RandomForestRegressor(
-        n_estimators=300,
-        max_depth=12,
-        min_samples_leaf=2,
-        random_state=42,
-        n_jobs=-1,
-    )
-    model.fit(X, y)
-
-    joblib.dump(model, MODEL_PATH)
-    joblib.dump(encoder, ENCODER_PATH)
-
-    importances = dict(zip(feature_columns, model.feature_importances_.round(4).tolist()))
-
     return TrainResponse(
         status="success",
-        samples_trained=len(X),
+        samples_trained=samples_trained,
         feature_importances=importances,
     )
 
