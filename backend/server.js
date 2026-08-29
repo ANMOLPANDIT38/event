@@ -8,7 +8,7 @@ const axios = require('axios');
 const app = express();
 
 const PORT = process.env.PORT || 3000;
-const FORECAST_URL = process.env.FORECAST_URL || 'http://localhost:8000';
+const FORECAST_URL = process.env.FORECAST_URL || 'http://127.0.0.1:8000';
 
 app.use(cors());
 app.use(morgan('dev'));
@@ -22,23 +22,15 @@ app.get('/health', (req, res) => {
 });
 
 app.post('/api/train', async (req, res) => {
-
   try {
-
     console.log('Training URL =', `${FORECAST_URL}/train`);
 
-    const response = await axios.post(
-      `${FORECAST_URL}/train`
-    );
-
+    const response = await axios.post(`${FORECAST_URL}/train`, {}, { timeout: 60000 });
     res.json(response.data);
-
   } catch (err) {
-
-    console.log('TRAIN ERROR =', err.response?.data);
+    console.error('TRAIN ERROR =', err.response?.data || err.message);
 
     const status = err.response?.status || 502;
-
     const detail =
       err.response?.data || {
         error: 'Training failed',
@@ -50,8 +42,7 @@ app.post('/api/train', async (req, res) => {
 });
 
 app.post('/api/forecast', async (req, res) => {
-
-  const {
+  let {
     event_type,
     duration_minutes,
     priority
@@ -63,40 +54,33 @@ app.post('/api/forecast', async (req, res) => {
     });
   }
 
-  if (
-    duration_minutes == null ||
-    typeof duration_minutes !== 'number' ||
-    duration_minutes <= 0
-  ) {
+  duration_minutes = Number(duration_minutes);
+  priority = Number(priority);
 
+  if (isNaN(duration_minutes) || duration_minutes <= 0) {
     return res.status(400).json({
       error: 'Missing or invalid field: duration_minutes (positive number)'
     });
   }
 
-  if (
-    priority == null ||
-    typeof priority !== 'number' ||
-    priority < 1 ||
-    priority > 3
-  ) {
-
+  if (isNaN(priority) || priority < 1 || priority > 3) {
     return res.status(400).json({
       error: 'Missing or invalid field: priority (1, 2, or 3)'
     });
   }
 
+  // Normalize event_type to match Python backend format
+  const normalizedEventType = event_type
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '');
+
   try {
-
     console.log('FORECAST_URL =', FORECAST_URL);
-
-    console.log(
-      'Calling =',
-      `${FORECAST_URL}/forecast`
-    );
-
+    console.log('Calling =', `${FORECAST_URL}/forecast`);
     console.log('Request Body =', {
-      event_type,
+      event_type: normalizedEventType,
       duration_minutes,
       priority
     });
@@ -104,43 +88,25 @@ app.post('/api/forecast', async (req, res) => {
     const response = await axios.post(
       `${FORECAST_URL}/forecast`,
       {
-        event_type,
+        event_type: normalizedEventType,
         duration_minutes,
         priority
-      }
+      },
+      { timeout: 15000 }
     );
 
     console.log('SUCCESS =', response.data);
-
     res.json(response.data);
-
   } catch (err) {
+    console.error('STATUS =', err.response?.status);
+    console.error('DATA =', err.response?.data);
+    console.error('MESSAGE =', err.message);
 
-    console.log(
-      'STATUS =',
-      err.response?.status
-    );
-
-    console.log(
-      'DATA =',
-      err.response?.data
-    );
-
-    console.log(
-      'MESSAGE =',
-      err.message
-    );
-
-    const status =
-      err.response?.status || 502;
-
+    const status = err.response?.status || 502;
     const detail =
       err.response?.data || {
-        error:
-          'Forecasting service unavailable',
-
-        detail:
-          err.message
+        error: 'Forecasting service unavailable',
+        detail: err.message
       };
 
     res.status(status).json(detail);
@@ -148,9 +114,5 @@ app.post('/api/forecast', async (req, res) => {
 });
 
 app.listen(PORT, () => {
-
-  console.log(
-    `Backend running on port ${PORT}`
-  );
-
-});
+  console.log(`Backend running on port ${PORT}`);
+});

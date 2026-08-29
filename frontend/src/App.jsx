@@ -521,14 +521,15 @@ export default function App() {
     setError(null);
     setResult(null);
     try {
+      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000';
       const { data } = await axios.post(
-  `${import.meta.env.VITE_API_URL}/api/forecast`,
-  {
-    event_type: form.event_type.toLowerCase().replace(/ /g, '_').replace(/\//g, '_').replace(/_+/g, '_'),
-    duration_minutes: form.duration_minutes,
-    priority: form.priority,
-  }
-);
+        `${apiUrl}/api/forecast`,
+        {
+          event_type: form.event_type.toLowerCase().replace(/ /g, '_').replace(/\//g, '_').replace(/_+/g, '_'),
+          duration_minutes: form.duration_minutes,
+          priority: form.priority,
+        }
+      );
       setResult(data);
       setHistory((prev) =>
         [
