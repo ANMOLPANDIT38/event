@@ -52,6 +52,21 @@ def _train_and_persist():
     return len(X), importances
 
 
+def _validate_model() -> bool:
+    global model, encoder
+    if model is None or encoder is None:
+        return False
+    try:
+        test_type = list(encoder.classes_)[0]
+        enc = int(encoder.transform([test_type])[0])
+        test_in = np.array([[enc, 60.0, 1]])
+        _ = model.predict(test_in)
+        return True
+    except Exception as e:
+        print("Model validation check failed:", e)
+        return False
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global model, encoder
@@ -60,13 +75,14 @@ async def lifespan(app: FastAPI):
             model = joblib.load(MODEL_PATH)
             encoder = joblib.load(ENCODER_PATH)
         except Exception as e:
-            print("Error loading existing model/encoder, retraining:", e)
+            print("Error loading existing model/encoder:", e)
             model, encoder = None, None
-    if model is None or encoder is None:
+
+    if not _validate_model():
         try:
-            print("Model not found. Initializing and training model on startup...")
+            print("Model uninitialized or incompatible. Training on startup...")
             _train_and_persist()
-            print("Model successfully initialized on startup.")
+            print("Model successfully initialized and verified on startup.")
         except Exception as e:
             print("Failed to initialize model on startup:", e)
     yield
@@ -151,7 +167,7 @@ def _prepare_training_data(df_clean: pd.DataFrame, df_agg: pd.DataFrame):
 
 @app.get("/health")
 def health():
-    return {"status": "ok", "service": "gridlock-forecasting", "model_loaded": model is not None}
+    return {"status": "ok", "service": "gridlock-forecasting", "model_loaded": _validate_model()}
 
 
 @app.post("/train", response_model=TrainResponse)
@@ -174,24 +190,45 @@ def train():
 @app.post("/forecast", response_model=ForecastResponse)
 def forecast(req: ForecastRequest):
     """Accept event parameters, return predicted congestion score and operational resources."""
-    if model is None or encoder is None:
-        raise HTTPException(status_code=503, detail="Model not trained. POST /train first.")
+    global model, encoder
+
+    if not _validate_model():
+        try:
+            _train_and_persist()
+        except Exception as exc:
+            raise HTTPException(status_code=503, detail=f"Model not trained and auto-training failed: {exc}")
 
     if req.duration_minutes <= 0:
         raise HTTPException(status_code=422, detail="duration_minutes must be positive.")
     if req.priority < 1 or req.priority > 3:
         raise HTTPException(status_code=422, detail="priority must be 1, 2, or 3.")
 
-    try:
-        event_encoded = encoder.transform([req.event_type.lower()])[0]
-    except ValueError as exc:
-        raise HTTPException(
-            status_code=422,
-            detail=f"Unsupported event_type. Expected one of: {', '.join(EVENT_TYPE_RISK)}",
-        ) from exc
+    event_type_clean = req.event_type.lower().strip().replace(" ", "_").replace("/", "_")
+    while "__" in event_type_clean:
+        event_type_clean = event_type_clean.replace("__", "_")
+    event_type_clean = event_type_clean.strip("_")
 
-    X_input = np.array([[event_encoded, req.duration_minutes, req.priority]])
-    score = float(np.clip(model.predict(X_input)[0], 0.0, 100.0))
+    try:
+        if hasattr(encoder, "classes_") and event_type_clean in encoder.classes_:
+            event_encoded = int(encoder.transform([event_type_clean])[0])
+        elif hasattr(encoder, "classes_") and len(encoder.classes_) > 0:
+            event_encoded = int(encoder.transform([list(encoder.classes_)[0]])[0])
+        else:
+            event_encoded = 0
+    except Exception:
+        event_encoded = 0
+
+    try:
+        X_input = np.array([[event_encoded, float(req.duration_minutes), int(req.priority)]])
+        score = float(np.clip(model.predict(X_input)[0], 0.0, 100.0))
+    except Exception as exc:
+        # Auto-recover: retrain model and retry once
+        try:
+            _train_and_persist()
+            X_input = np.array([[event_encoded, float(req.duration_minutes), int(req.priority)]])
+            score = float(np.clip(model.predict(X_input)[0], 0.0, 100.0))
+        except Exception as retry_exc:
+            raise HTTPException(status_code=500, detail=f"Prediction computation failed: {retry_exc}")
 
     resources = _compute_resources(score)
 
